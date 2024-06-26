@@ -48,13 +48,13 @@ func (suite *WalletTestSuite) SetupSuite() {
 
 	encodingCfg := testutils.MakeTestEncodingConfig()
 
-	c, err := client.NewClientFromConfig(&chainCfg, encodingCfg.Codec)
+	cosmosClient, err := client.NewClientFromConfig(&chainCfg, encodingCfg.TxConfig, encodingCfg.Codec)
 	suite.Require().NoError(err)
-	suite.client = c
+	suite.client = cosmosClient
 
-	w, err := wallet.NewWallet(&accountCfg, c, encodingCfg.TxConfig)
+	cosmosWallet, err := wallet.NewWallet(&accountCfg, cosmosClient)
 	suite.Require().NoError(err)
-	suite.wallet = w
+	suite.wallet = cosmosWallet
 }
 
 func (suite *WalletTestSuite) TestBuildTx() {

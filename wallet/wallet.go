@@ -14,20 +14,17 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 
-	"github.com/riccardom/cosmos-go-wallet/client"
 	"github.com/riccardom/cosmos-go-wallet/types"
 )
 
 // Wallet represents a Cosmos wallet that should be used to create and send transactions to the chain
 type Wallet struct {
 	privKey cryptotypes.PrivKey
-
-	TxConfig sdkclient.TxConfig
-	Client   *client.Client
+	client  Client
 }
 
 // NewWallet allows to build a new Wallet instance
-func NewWallet(accountCfg *types.AccountConfig, client *client.Client, txConfig sdkclient.TxConfig) (*Wallet, error) {
+func NewWallet(accountCfg *types.AccountConfig, client Client) (*Wallet, error) {
 	// Get the private types
 	algo := hd.Secp256k1
 	derivedPriv, err := algo.Derive()(accountCfg.Mnemonic, "", accountCfg.HDPath)
@@ -36,15 +33,14 @@ func NewWallet(accountCfg *types.AccountConfig, client *client.Client, txConfig 
 	}
 
 	return &Wallet{
-		privKey:  algo.Generate()(derivedPriv),
-		TxConfig: txConfig,
-		Client:   client,
+		privKey: algo.Generate()(derivedPriv),
+		client:  client,
 	}, nil
 }
 
 // AccAddress returns the address of the account that is going to be used to sign the transactions
 func (w *Wallet) AccAddress() string {
-	bech32Addr, err := bech32.ConvertAndEncode(w.Client.GetAccountPrefix(), w.privKey.PubKey().Address())
+	bech32Addr, err := bech32.ConvertAndEncode(w.client.GetAccountPrefix(), w.privKey.PubKey().Address())
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +55,7 @@ func (w *Wallet) BroadcastTxAsync(data *types.TransactionData) (*sdk.TxResponse,
 		return nil, err
 	}
 
-	return w.Client.BroadcastTxAsync(builder.GetTx())
+	return w.client.BroadcastTxAsync(builder.GetTx())
 }
 
 // BroadcastTxSync creates and signs a transaction with the provided messages and fees,
@@ -70,7 +66,7 @@ func (w *Wallet) BroadcastTxSync(data *types.TransactionData) (*sdk.TxResponse, 
 		return nil, err
 	}
 
-	return w.Client.BroadcastTxSync(builder.GetTx())
+	return w.client.BroadcastTxSync(builder.GetTx())
 }
 
 // BroadcastTxCommit creates and signs a transaction with the provided messages and fees,
@@ -81,23 +77,26 @@ func (w *Wallet) BroadcastTxCommit(data *types.TransactionData) (*sdk.TxResponse
 		return nil, err
 	}
 
-	return w.Client.BroadcastTxCommit(builder.GetTx())
+	return w.client.BroadcastTxCommit(builder.GetTx())
 }
 
 func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, error) {
 	// Get the account
-	account, err := w.Client.GetAccount(w.AccAddress())
+	account, err := w.client.GetAccount(w.AccAddress())
 	if err != nil {
 		return nil, fmt.Errorf("error while getting the account from the chain: %s", err)
 	}
 
 	// Set account sequence
 	if data.Sequence != nil {
-		account.SetSequence(*data.Sequence)
+		err = account.SetSequence(*data.Sequence)
+		if err != nil {
+			return nil, fmt.Errorf("error while setting the account sequence: %s", err)
+		}
 	}
 
 	// Build the transaction
-	builder := w.TxConfig.NewTxBuilder()
+	builder := w.client.GetTxConfig().NewTxBuilder()
 	if data.Memo != "" {
 		builder.SetMemo(data.Memo)
 	}
@@ -126,7 +125,7 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 	feeAmount := data.FeeAmount
 	if data.FeeAuto {
 		// Compute the fee amount based on the gas limit and the gas price
-		feeAmount = w.Client.GetFees(int64(gasLimit))
+		feeAmount = w.client.GetFees(int64(gasLimit))
 	}
 
 	// Set the new gas and fee
@@ -148,7 +147,7 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 		return nil, err
 	}
 
-	chainID, err := w.Client.GetChainID()
+	chainID, err := w.client.GetChainID()
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +166,7 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 		},
 		builder,
 		w.privKey,
-		w.TxConfig,
+		w.client.GetTxConfig(),
 		account.GetSequence(),
 	)
 	if err != nil {
@@ -200,10 +199,10 @@ func (w *Wallet) simulateTx(account sdk.AccountI, builder sdkclient.TxBuilder) (
 
 	// Set a fake amount of gas and fees
 	builder.SetGasLimit(200_000)
-	builder.SetFeeAmount(w.Client.GetFees(int64(200_000)))
+	builder.SetFeeAmount(w.client.GetFees(int64(200_000)))
 
 	// Simulate the execution of the transaction
-	adjusted, err := w.Client.SimulateTx(builder.GetTx())
+	adjusted, err := w.client.SimulateTx(builder.GetTx())
 	if err != nil {
 		return 0, fmt.Errorf("error while simulating tx: %s", err)
 	}

@@ -6,14 +6,13 @@ import (
 	"math"
 	"strings"
 
-	"github.com/cosmos/cosmos-sdk/types/bech32"
-	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
-
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
-	"github.com/cosmos/cosmos-sdk/client"
+	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -29,6 +28,7 @@ type Client struct {
 	rpcClient rpcclient.Client
 	grpcConn  grpc.ClientConnInterface
 	codec     codec.Codec
+	txConfig  sdkclient.TxConfig
 	txEncoder sdk.TxEncoder
 
 	authClient authtypes.QueryClient
@@ -44,6 +44,7 @@ func NewClient(
 	gasPrice sdk.DecCoin,
 	rpcClient *rpchttp.HTTP,
 	grpcConn grpc.ClientConnInterface,
+	txConfig sdkclient.TxConfig,
 	codec codec.Codec,
 ) *Client {
 	return &Client{
@@ -52,6 +53,7 @@ func NewClient(
 		rpcClient:     rpcClient,
 		grpcConn:      grpcConn,
 		txEncoder:     tx.DefaultTxEncoder(),
+		txConfig:      txConfig,
 		authClient:    authtypes.NewQueryClient(grpcConn),
 		txClient:      sdktx.NewServiceClient(grpcConn),
 		gasPrice:      gasPrice,
@@ -60,8 +62,8 @@ func NewClient(
 }
 
 // NewClientFromConfig returns a new Client instance based on the given configuration
-func NewClientFromConfig(config *types.ChainConfig, codec codec.Codec) (*Client, error) {
-	rpcClient, err := client.NewClientFromNode(config.RPCAddr)
+func NewClientFromConfig(config *types.ChainConfig, txConfig sdkclient.TxConfig, codec codec.Codec) (*Client, error) {
+	rpcClient, err := sdkclient.NewClientFromNode(config.RPCAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +79,7 @@ func NewClientFromConfig(config *types.ChainConfig, codec codec.Codec) (*Client,
 	}
 
 	// Build the client
-	cosmosClient := NewClient(config.Bech32Prefix, gasPrice, rpcClient, grpcConn, codec)
+	cosmosClient := NewClient(config.Bech32Prefix, gasPrice, rpcClient, grpcConn, txConfig, codec)
 
 	// Set the options based on the config
 	cosmosClient = cosmosClient.WithGasAdjustment(config.GasAdjustment)
@@ -94,6 +96,11 @@ func (c *Client) WithGasAdjustment(gasAdjustment float64) *Client {
 }
 
 // --------------------------------------------------------------------------------------------------------------------
+
+// GetTxConfig returns the transaction configuration associated to this client
+func (c *Client) GetTxConfig() sdkclient.TxConfig {
+	return c.txConfig
+}
 
 // GetAccountPrefix returns the account prefix to be used when serializing addresses as Bech32
 func (c *Client) GetAccountPrefix() string {
@@ -158,6 +165,8 @@ func (c *Client) GetAccount(address string) (sdk.AccountI, error) {
 
 	return account, nil
 }
+
+// --------------------------------------------------------------------------------------------------------------------
 
 // SimulateTx simulates the execution of the given transaction, and returns the adjusted
 // amount of gas that should be used in order to properly execute it
