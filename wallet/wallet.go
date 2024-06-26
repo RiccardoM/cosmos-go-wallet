@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"context"
 	"fmt"
 
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
@@ -12,10 +13,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 
-	"github.com/desmos-labs/cosmos-go-wallet/client"
-	"github.com/desmos-labs/cosmos-go-wallet/types"
+	"github.com/riccardom/cosmos-go-wallet/client"
+	"github.com/riccardom/cosmos-go-wallet/types"
 )
 
 // Wallet represents a Cosmos wallet that should be used to create and send transactions to the chain
@@ -155,6 +155,10 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 
 	// Sign the transaction with the private key
 	sig, err = tx.SignWithPrivKey(
+		// Since we are only signing using the DIRECT method, the context
+		// here is not important as it's only used for TEXT signing
+		context.Background(),
+
 		signing.SignMode_SIGN_MODE_DIRECT,
 		authsigning.SignerData{
 			ChainID:       chainID,
@@ -179,7 +183,7 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 }
 
 // simulateTx simulates the given transaction and returns the amount of adjusted gas that should be used
-func (w *Wallet) simulateTx(account authtypes.AccountI, builder sdkclient.TxBuilder) (uint64, error) {
+func (w *Wallet) simulateTx(account sdk.AccountI, builder sdkclient.TxBuilder) (uint64, error) {
 	// Create an empty signature literal as the ante handler will populate with a
 	// sentinel pubkey.
 	sig := signing.SignatureV2{

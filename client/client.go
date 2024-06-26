@@ -18,7 +18,7 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"google.golang.org/grpc"
 
-	"github.com/desmos-labs/cosmos-go-wallet/types"
+	"github.com/riccardom/cosmos-go-wallet/types"
 )
 
 // Client represents a Cosmos client that should be used to interact with a chain
@@ -115,13 +115,13 @@ func (c *Client) GetFees(gas int64) sdk.Coins {
 }
 
 // GetAccount returns the details of the account having the given address reading it from the chain
-func (c *Client) GetAccount(address string) (authtypes.AccountI, error) {
+func (c *Client) GetAccount(address string) (sdk.AccountI, error) {
 	res, err := c.AuthClient.Account(context.Background(), &authtypes.QueryAccountRequest{Address: address})
 	if err != nil {
 		return nil, err
 	}
 
-	var account authtypes.AccountI
+	var account sdk.AccountI
 	err = c.Codec.UnpackAny(res.Account, &account)
 	if err != nil {
 		return nil, err

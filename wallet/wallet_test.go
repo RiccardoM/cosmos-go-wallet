@@ -11,10 +11,10 @@ import (
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/desmos-labs/cosmos-go-wallet/client"
-	"github.com/desmos-labs/cosmos-go-wallet/testutils"
-	"github.com/desmos-labs/cosmos-go-wallet/types"
-	"github.com/desmos-labs/cosmos-go-wallet/wallet"
+	"github.com/riccardom/cosmos-go-wallet/client"
+	"github.com/riccardom/cosmos-go-wallet/testutils"
+	"github.com/riccardom/cosmos-go-wallet/types"
+	"github.com/riccardom/cosmos-go-wallet/wallet"
 )
 
 func TestWalletTestSuite(t *testing.T) {
