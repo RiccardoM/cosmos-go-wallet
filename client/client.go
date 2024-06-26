@@ -72,7 +72,7 @@ func (c *Client) GetAccountPrefix() string {
 }
 
 // ParseAddress parses the given address as an sdk.AccAddress instance
-func (n *Client) ParseAddress(address string) (sdk.AccAddress, error) {
+func (c *Client) ParseAddress(address string) (sdk.AccAddress, error) {
 	if len(strings.TrimSpace(address)) == 0 {
 		return nil, fmt.Errorf("empty address string is not allowed")
 	}
@@ -82,8 +82,8 @@ func (n *Client) ParseAddress(address string) (sdk.AccAddress, error) {
 		return nil, err
 	}
 
-	if prefix != n.GetAccountPrefix() {
-		return nil, fmt.Errorf("invalid bech32 prefix: exptected %s, got %s", n.GetAccountPrefix(), prefix)
+	if prefix != c.GetAccountPrefix() {
+		return nil, fmt.Errorf("invalid bech32 prefix: exptected %s, got %s", c.GetAccountPrefix(), prefix)
 	}
 
 	err = sdk.VerifyAddressFormat(bz)
