@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	sdkmath "cosmossdk.io/math"
 	sdkclient "github.com/cosmos/cosmos-sdk/client"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	_ "github.com/cosmos/cosmos-sdk/x/auth/tx/config" // import for side-effects
@@ -47,7 +48,7 @@ func (suite *WalletTestSuite) SetupSuite() {
 
 	encodingCfg := testutils.MakeTestEncodingConfig()
 
-	c, err := client.NewClient(&chainCfg, encodingCfg.Codec)
+	c, err := client.NewClientFromConfig(&chainCfg, encodingCfg.Codec)
 	suite.Require().NoError(err)
 	suite.client = c
 
@@ -73,7 +74,7 @@ func (suite *WalletTestSuite) TestBuildTx() {
 				banktypes.NewMsgSend(
 					sdk.MustAccAddressFromBech32(suite.wallet.AccAddress()),
 					sdk.MustAccAddressFromBech32("desmos1q62k9kvjy7v2wh0yt9jqaepnzezz3s49j9gnpk"),
-					sdk.NewCoins(sdk.NewCoin("udaric", sdk.NewInt(10000))),
+					sdk.NewCoins(sdk.NewCoin("udaric", sdkmath.NewInt(10000))),
 				),
 			},
 			check: func(builder sdkclient.TxBuilder) {

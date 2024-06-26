@@ -10,6 +10,7 @@ import (
 	sdktx "github.com/cosmos/cosmos-sdk/types/tx"
 
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
+	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -23,27 +24,49 @@ import (
 
 // Client represents a Cosmos client that should be used to interact with a chain
 type Client struct {
-	prefix    string
-	Codec     codec.Codec
-	RPCClient rpcclient.Client
-	GRPCConn  *grpc.ClientConn
+	prefix string
+
+	rpcClient rpcclient.Client
+	grpcConn  grpc.ClientConnInterface
+	codec     codec.Codec
 	txEncoder sdk.TxEncoder
 
-	AuthClient authtypes.QueryClient
-	TxClient   sdktx.ServiceClient
+	authClient authtypes.QueryClient
+	txClient   sdktx.ServiceClient
 
-	GasPrice      sdk.DecCoin
-	GasAdjustment float64
+	gasPrice      sdk.DecCoin
+	gasAdjustment float64
 }
 
-// NewClient returns a new Client instance
-func NewClient(config *types.ChainConfig, codec codec.Codec) (*Client, error) {
-	client, err := client.NewClientFromNode(config.RPCAddr)
+// NewClient allows to build a new Client instance
+func NewClient(
+	bech32Prefix string,
+	gasPrice sdk.DecCoin,
+	rpcClient *rpchttp.HTTP,
+	grpcConn grpc.ClientConnInterface,
+	codec codec.Codec,
+) *Client {
+	return &Client{
+		prefix:        bech32Prefix,
+		codec:         codec,
+		rpcClient:     rpcClient,
+		grpcConn:      grpcConn,
+		txEncoder:     tx.DefaultTxEncoder(),
+		authClient:    authtypes.NewQueryClient(grpcConn),
+		txClient:      sdktx.NewServiceClient(grpcConn),
+		gasPrice:      gasPrice,
+		gasAdjustment: 1.5,
+	}
+}
+
+// NewClientFromConfig returns a new Client instance based on the given configuration
+func NewClientFromConfig(config *types.ChainConfig, codec codec.Codec) (*Client, error) {
+	rpcClient, err := client.NewClientFromNode(config.RPCAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	grpcConn, err := types.CreateGrpcConnection(config.GRPCAddr)
+	grpcConn, err := types.CreateGrpcConnection(config, codec)
 	if err != nil {
 		return nil, fmt.Errorf("error while creating a GRPC connection: %s", err)
 	}
@@ -53,18 +76,24 @@ func NewClient(config *types.ChainConfig, codec codec.Codec) (*Client, error) {
 		return nil, fmt.Errorf("error while parsing gas price: %s", err)
 	}
 
-	return &Client{
-		prefix:        config.Bech32Prefix,
-		Codec:         codec,
-		RPCClient:     client,
-		GRPCConn:      grpcConn,
-		txEncoder:     tx.DefaultTxEncoder(),
-		AuthClient:    authtypes.NewQueryClient(grpcConn),
-		TxClient:      sdktx.NewServiceClient(grpcConn),
-		GasPrice:      gasPrice,
-		GasAdjustment: math.Max(config.GasAdjustment, 1.5),
-	}, nil
+	// Build the client
+	cosmosClient := NewClient(config.Bech32Prefix, gasPrice, rpcClient, grpcConn, codec)
+
+	// Set the options based on the config
+	cosmosClient = cosmosClient.WithGasAdjustment(config.GasAdjustment)
+
+	return cosmosClient, nil
 }
+
+// --------------------------------------------------------------------------------------------------------------------
+
+// WithGasAdjustment allows to set the gas adjustment factor to be used when simulating transactions
+func (c *Client) WithGasAdjustment(gasAdjustment float64) *Client {
+	c.gasAdjustment = gasAdjustment
+	return c
+}
+
+// --------------------------------------------------------------------------------------------------------------------
 
 // GetAccountPrefix returns the account prefix to be used when serializing addresses as Bech32
 func (c *Client) GetAccountPrefix() string {
@@ -96,7 +125,7 @@ func (c *Client) ParseAddress(address string) (sdk.AccAddress, error) {
 
 // GetChainID returns the chain id associated to this client
 func (c *Client) GetChainID() (string, error) {
-	res, err := c.RPCClient.Status(context.Background())
+	res, err := c.rpcClient.Status(context.Background())
 	if err != nil {
 		return "", fmt.Errorf("error while getting chain id: %s", err)
 	}
@@ -106,23 +135,23 @@ func (c *Client) GetChainID() (string, error) {
 
 // GetFeeDenom returns the denom used to pay for fees, based on the gas price inside the config
 func (c *Client) GetFeeDenom() string {
-	return c.GasPrice.Denom
+	return c.gasPrice.Denom
 }
 
 // GetFees returns the fees that should be paid to perform a transaction with the given gas
 func (c *Client) GetFees(gas int64) sdk.Coins {
-	return sdk.NewCoins(sdk.NewCoin(c.GasPrice.Denom, c.GasPrice.Amount.MulInt64(gas).Ceil().RoundInt()))
+	return sdk.NewCoins(sdk.NewCoin(c.gasPrice.Denom, c.gasPrice.Amount.MulInt64(gas).Ceil().RoundInt()))
 }
 
 // GetAccount returns the details of the account having the given address reading it from the chain
 func (c *Client) GetAccount(address string) (sdk.AccountI, error) {
-	res, err := c.AuthClient.Account(context.Background(), &authtypes.QueryAccountRequest{Address: address})
+	res, err := c.authClient.Account(context.Background(), &authtypes.QueryAccountRequest{Address: address})
 	if err != nil {
 		return nil, err
 	}
 
 	var account sdk.AccountI
-	err = c.Codec.UnpackAny(res.Account, &account)
+	err = c.codec.UnpackAny(res.Account, &account)
 	if err != nil {
 		return nil, err
 	}
@@ -138,14 +167,14 @@ func (c *Client) SimulateTx(tx signing.Tx) (uint64, error) {
 		return 0, err
 	}
 
-	simRes, err := c.TxClient.Simulate(context.Background(), &sdktx.SimulateRequest{
+	simRes, err := c.txClient.Simulate(context.Background(), &sdktx.SimulateRequest{
 		TxBytes: bytes,
 	})
 	if err != nil {
 		return 0, err
 	}
 
-	return uint64(math.Ceil(c.GasAdjustment * float64(simRes.GasInfo.GasUsed))), nil
+	return uint64(math.Ceil(c.gasAdjustment * float64(simRes.GasInfo.GasUsed))), nil
 }
 
 // BroadcastTxAsync allows to broadcast a transaction containing the given messages using the sync method
@@ -155,7 +184,7 @@ func (c *Client) BroadcastTxAsync(tx signing.Tx) (*sdk.TxResponse, error) {
 		return nil, err
 	}
 
-	res, err := c.RPCClient.BroadcastTxAsync(context.Background(), bytes)
+	res, err := c.rpcClient.BroadcastTxAsync(context.Background(), bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +200,7 @@ func (c *Client) BroadcastTxSync(tx signing.Tx) (*sdk.TxResponse, error) {
 		return nil, err
 	}
 
-	res, err := c.RPCClient.BroadcastTxSync(context.Background(), bytes)
+	res, err := c.rpcClient.BroadcastTxSync(context.Background(), bytes)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +216,7 @@ func (c *Client) BroadcastTxCommit(tx signing.Tx) (*sdk.TxResponse, error) {
 		return nil, err
 	}
 
-	res, err := c.RPCClient.BroadcastTxCommit(context.Background(), bytes)
+	res, err := c.rpcClient.BroadcastTxCommit(context.Background(), bytes)
 	if err != nil {
 		return nil, err
 	}
