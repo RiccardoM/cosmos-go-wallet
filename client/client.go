@@ -103,6 +103,11 @@ func (c *Client) WithGasAdjustment(gasAdjustment float64) *Client {
 
 // --------------------------------------------------------------------------------------------------------------------
 
+// GetGRPConn returns the gRPC connection associated to this client
+func (c *Client) GetGRPConn() grpc.ClientConnInterface {
+	return c.grpcConn
+}
+
 // GetTxConfig returns the transaction configuration associated to this client
 func (c *Client) GetTxConfig() sdkclient.TxConfig {
 	return c.txConfig

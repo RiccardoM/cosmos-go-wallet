@@ -1,6 +1,9 @@
 package types
 
-import sdk "github.com/cosmos/cosmos-sdk/types"
+import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/signing"
+)
 
 // TransactionData contains all the data about a transaction
 type TransactionData struct {
@@ -63,3 +66,13 @@ func (t *TransactionData) WithSequence(sequence uint64) *TransactionData {
 	t.Sequence = &sequence
 	return t
 }
+
+// TransactionResponse contains all the data about a transaction response
+type TransactionResponse struct {
+	*sdk.TxResponse
+	Account sdk.AccountI
+	Tx      signing.Tx
+}
+
+// TxBroadcastMethod represents a function that allows to broadcast a transaction
+type TxBroadcastMethod func(tx signing.Tx) (*sdk.TxResponse, error)

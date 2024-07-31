@@ -47,51 +47,61 @@ func (w *Wallet) AccAddress() string {
 	return bech32Addr
 }
 
-// BroadcastTxAsync creates and signs a transaction with the provided messages and fees,
-// then broadcasts it using the async method
-func (w *Wallet) BroadcastTxAsync(data *types.TransactionData) (*sdk.TxResponse, error) {
-	builder, err := w.BuildTx(data)
+// getTransactionResponse builds a transactions from the provided data and broadcasts it using the provided method
+func (w *Wallet) getTransactionResponse(data *types.TransactionData, broadcast types.TxBroadcastMethod) (*types.TransactionResponse, error) {
+	account, builder, err := w.BuildTx(data)
 	if err != nil {
 		return nil, err
 	}
 
-	return w.client.BroadcastTxAsync(builder.GetTx())
+	// Build the transaction
+	builtTx := builder.GetTx()
+
+	// Broadcast the transaction
+	txResponse, err := broadcast(builtTx)
+	if err != nil {
+		return nil, fmt.Errorf("error while broadcasting the transaction: %s", err)
+	}
+
+	// Return the transaction response
+	return &types.TransactionResponse{
+		TxResponse: txResponse,
+		Account:    account,
+		Tx:         builtTx,
+	}, nil
+}
+
+// BroadcastTxAsync creates and signs a transaction with the provided messages and fees,
+// then broadcasts it using the async method
+func (w *Wallet) BroadcastTxAsync(data *types.TransactionData) (*types.TransactionResponse, error) {
+	return w.getTransactionResponse(data, w.client.BroadcastTxAsync)
 }
 
 // BroadcastTxSync creates and signs a transaction with the provided messages and fees,
 // then broadcasts it using the sync method
-func (w *Wallet) BroadcastTxSync(data *types.TransactionData) (*sdk.TxResponse, error) {
-	builder, err := w.BuildTx(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return w.client.BroadcastTxSync(builder.GetTx())
+func (w *Wallet) BroadcastTxSync(data *types.TransactionData) (*types.TransactionResponse, error) {
+	return w.getTransactionResponse(data, w.client.BroadcastTxSync)
 }
 
 // BroadcastTxCommit creates and signs a transaction with the provided messages and fees,
 // then broadcasts it using the commit method
-func (w *Wallet) BroadcastTxCommit(data *types.TransactionData) (*sdk.TxResponse, error) {
-	builder, err := w.BuildTx(data)
-	if err != nil {
-		return nil, err
-	}
-
-	return w.client.BroadcastTxCommit(builder.GetTx())
+func (w *Wallet) BroadcastTxCommit(data *types.TransactionData) (*types.TransactionResponse, error) {
+	return w.getTransactionResponse(data, w.client.BroadcastTxCommit)
 }
 
-func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, error) {
+// BuildTx creates a transaction with the provided data
+func (w *Wallet) BuildTx(data *types.TransactionData) (sdk.AccountI, sdkclient.TxBuilder, error) {
 	// Get the account
 	account, err := w.client.GetAccount(w.AccAddress())
 	if err != nil {
-		return nil, fmt.Errorf("error while getting the account from the chain: %s", err)
+		return nil, nil, fmt.Errorf("error while getting the account from the chain: %s", err)
 	}
 
 	// Set account sequence
-	if data.Sequence != nil {
+	if data.Sequence != nil && *data.Sequence > 0 {
 		err = account.SetSequence(*data.Sequence)
 		if err != nil {
-			return nil, fmt.Errorf("error while setting the account sequence: %s", err)
+			return nil, nil, fmt.Errorf("error while setting the account sequence: %s", err)
 		}
 	}
 
@@ -105,19 +115,19 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 	}
 
 	if len(data.Messages) == 0 {
-		return nil, fmt.Errorf("error while building a transaction with no messages")
+		return nil, nil, fmt.Errorf("error while building a transaction with no messages")
 	}
 
 	err = builder.SetMsgs(data.Messages...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	gasLimit := data.GasLimit
 	if data.GasAuto {
 		adjusted, err := w.simulateTx(account, builder)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		gasLimit = adjusted
 	}
@@ -144,12 +154,12 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 
 	err = builder.SetSignatures(sig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	chainID, err := w.client.GetChainID()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Sign the transaction with the private key
@@ -170,15 +180,15 @@ func (w *Wallet) BuildTx(data *types.TransactionData) (sdkclient.TxBuilder, erro
 		account.GetSequence(),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = builder.SetSignatures(sig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return builder, nil
+	return account, builder, nil
 }
 
 // simulateTx simulates the given transaction and returns the amount of adjusted gas that should be used
