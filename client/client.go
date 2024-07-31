@@ -16,6 +16,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/signing"
 	"github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"google.golang.org/grpc"
 
 	"github.com/riccardom/cosmos-go-wallet/types"
@@ -32,6 +33,7 @@ type Client struct {
 	txEncoder sdk.TxEncoder
 
 	authClient authtypes.QueryClient
+	bankClient banktypes.QueryClient
 	txClient   sdktx.ServiceClient
 
 	gasPrice      sdk.DecCoin
@@ -48,14 +50,18 @@ func NewClient(
 	codec codec.Codec,
 ) *Client {
 	return &Client{
-		prefix:        bech32Prefix,
-		codec:         codec,
-		rpcClient:     rpcClient,
-		grpcConn:      grpcConn,
-		txEncoder:     tx.DefaultTxEncoder(),
-		txConfig:      txConfig,
-		authClient:    authtypes.NewQueryClient(grpcConn),
-		txClient:      sdktx.NewServiceClient(grpcConn),
+		prefix: bech32Prefix,
+
+		codec:     codec,
+		rpcClient: rpcClient,
+		grpcConn:  grpcConn,
+		txEncoder: tx.DefaultTxEncoder(),
+		txConfig:  txConfig,
+
+		authClient: authtypes.NewQueryClient(grpcConn),
+		bankClient: banktypes.NewQueryClient(grpcConn),
+		txClient:   sdktx.NewServiceClient(grpcConn),
+
 		gasPrice:      gasPrice,
 		gasAdjustment: 1.5,
 	}
@@ -164,6 +170,16 @@ func (c *Client) GetAccount(address string) (sdk.AccountI, error) {
 	}
 
 	return account, nil
+}
+
+// GetBalances returns the balances of the account having the given address
+func (c *Client) GetBalances(address string) (sdk.Coins, error) {
+	res, err := c.bankClient.AllBalances(context.Background(), &banktypes.QueryAllBalancesRequest{Address: address})
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Balances, nil
 }
 
 // --------------------------------------------------------------------------------------------------------------------
