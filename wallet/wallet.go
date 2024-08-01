@@ -48,44 +48,45 @@ func (w *Wallet) AccAddress() string {
 }
 
 // getTransactionResponse builds a transactions from the provided data and broadcasts it using the provided method
-func (w *Wallet) getTransactionResponse(data *types.TransactionData, broadcast types.TxBroadcastMethod) (*types.TransactionResponse, error) {
+func (w *Wallet) getTransactionResponse(data *types.TransactionData, broadcast types.TxBroadcastMethod) (types.TransactionResponse, error) {
+	response := types.NewTransactionResponse()
+
 	account, builder, err := w.BuildTx(data)
+	response = response.WithAccount(account)
 	if err != nil {
-		return nil, err
+		return response, err
 	}
 
 	// Build the transaction
 	builtTx := builder.GetTx()
+	response = response.WithTx(builtTx)
 
 	// Broadcast the transaction
 	txResponse, err := broadcast(builtTx)
+	response = response.WithResponse(txResponse)
 	if err != nil {
-		return nil, fmt.Errorf("error while broadcasting the transaction: %s", err)
+		return response, fmt.Errorf("error while broadcasting the transaction: %s", err)
 	}
 
 	// Return the transaction response
-	return &types.TransactionResponse{
-		TxResponse: txResponse,
-		Account:    account,
-		Tx:         builtTx,
-	}, nil
+	return response, nil
 }
 
 // BroadcastTxAsync creates and signs a transaction with the provided messages and fees,
 // then broadcasts it using the async method
-func (w *Wallet) BroadcastTxAsync(data *types.TransactionData) (*types.TransactionResponse, error) {
+func (w *Wallet) BroadcastTxAsync(data *types.TransactionData) (types.TransactionResponse, error) {
 	return w.getTransactionResponse(data, w.client.BroadcastTxAsync)
 }
 
 // BroadcastTxSync creates and signs a transaction with the provided messages and fees,
 // then broadcasts it using the sync method
-func (w *Wallet) BroadcastTxSync(data *types.TransactionData) (*types.TransactionResponse, error) {
+func (w *Wallet) BroadcastTxSync(data *types.TransactionData) (types.TransactionResponse, error) {
 	return w.getTransactionResponse(data, w.client.BroadcastTxSync)
 }
 
 // BroadcastTxCommit creates and signs a transaction with the provided messages and fees,
 // then broadcasts it using the commit method
-func (w *Wallet) BroadcastTxCommit(data *types.TransactionData) (*types.TransactionResponse, error) {
+func (w *Wallet) BroadcastTxCommit(data *types.TransactionData) (types.TransactionResponse, error) {
 	return w.getTransactionResponse(data, w.client.BroadcastTxCommit)
 }
 

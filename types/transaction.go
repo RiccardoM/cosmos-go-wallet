@@ -69,9 +69,36 @@ func (t *TransactionData) WithSequence(sequence uint64) *TransactionData {
 
 // TransactionResponse contains all the data about a transaction response
 type TransactionResponse struct {
+	// Response is the response of the transaction broadcast
+	// It can be null if there was some error while broadcasting the transaction
 	*sdk.TxResponse
+
+	// Account is the account that signed the transaction
+	// It can be null if there was some error while building the transaction
 	Account sdk.AccountI
-	Tx      signing.Tx
+
+	// Tx is the transaction that was broadcasted
+	// It can be null if there was some error while building the transaction
+	Tx signing.Tx
+}
+
+func NewTransactionResponse() TransactionResponse {
+	return TransactionResponse{}
+}
+
+func (r TransactionResponse) WithAccount(account sdk.AccountI) TransactionResponse {
+	r.Account = account
+	return r
+}
+
+func (r TransactionResponse) WithTx(tx signing.Tx) TransactionResponse {
+	r.Tx = tx
+	return r
+}
+
+func (r TransactionResponse) WithResponse(response *sdk.TxResponse) TransactionResponse {
+	r.TxResponse = response
+	return r
 }
 
 // TxBroadcastMethod represents a function that allows to broadcast a transaction
