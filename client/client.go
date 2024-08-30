@@ -103,6 +103,11 @@ func (c *Client) WithGasAdjustment(gasAdjustment float64) *Client {
 
 // --------------------------------------------------------------------------------------------------------------------
 
+// GetRPCClient returns the RPC client associated to this client
+func (c *Client) GetRPCClient() rpcclient.Client {
+	return c.rpcClient
+}
+
 // GetGRPConn returns the gRPC connection associated to this client
 func (c *Client) GetGRPConn() grpc.ClientConnInterface {
 	return c.grpcConn
