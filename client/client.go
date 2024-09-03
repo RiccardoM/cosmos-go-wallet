@@ -118,6 +118,11 @@ func (c *Client) GetTxConfig() sdkclient.TxConfig {
 	return c.txConfig
 }
 
+// GetCodec returns the codec associated to this client
+func (c *Client) GetCodec() codec.Codec {
+	return c.codec
+}
+
 // GetAccountPrefix returns the account prefix to be used when serializing addresses as Bech32
 func (c *Client) GetAccountPrefix() string {
 	return c.prefix
